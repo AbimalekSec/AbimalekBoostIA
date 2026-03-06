@@ -17,8 +17,8 @@
 # ================================================================
 #  CONFIGURAÇÃO — ALTERE PARA SEU REPOSITÓRIO
 # ================================================================
-$REPO_USER   = "SEU_USUARIO"           # seu username do GitHub
-$REPO_NAME   = "SEU_REPO"             # nome do repositório
+$REPO_USER   = "AbimalekSec"           # seu username do GitHub
+$REPO_NAME   = "AbimalekBoostIA"             # nome do repositório
 $REPO_BRANCH = "main"                 # branch principal
 $BASE_URL    = "https://raw.githubusercontent.com/$REPO_USER/$REPO_NAME/$REPO_BRANCH"
 
