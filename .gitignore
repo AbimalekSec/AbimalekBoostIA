@@ -1,0 +1,21 @@
+# Credenciais — NUNCA subir pro GitHub
+.env
+*.env
+
+# Banco local
+malikia.db
+*.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+
+# Config do start_server
+starter_config.json
+
+# URL gerada pelo tunnel (recriada automaticamente)
+MalikIA/url.json
