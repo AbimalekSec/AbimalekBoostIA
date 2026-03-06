@@ -11,11 +11,10 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
 *.egg-info/
 
-# Config do start_server
+# Config do start_server (tem suas credenciais GitHub)
 starter_config.json
 
-# URL gerada pelo tunnel (recriada automaticamente)
-MalikIA/url.json
+# NÃO ignorar url.json — o loader precisa ler ele do GitHub
+# MalikIA/url.json   ← comentado de propósito
