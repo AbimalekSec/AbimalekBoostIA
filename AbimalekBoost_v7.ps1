@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.1
+#Requires -Version 5.1
 <#
 .SYNOPSIS
     AbimalekBoost v6.1
@@ -151,23 +151,19 @@ if (-not $Script:IAAtiva) {
 #  Substitua com suas credenciais do projeto Supabase
 # ================================================================
 $Script:MalikIA = [ordered]@{
-    # !! CONFIGURE AQUI !!
-    # Acesse: supabase.com > seu projeto > Settings > API
-    SupabaseURL    = "https://SEU-PROJETO.supabase.co"   # Project URL
-    SupabaseAnonKey = "SUA-ANON-KEY-AQUI"                # anon public key
+    # URL e APIKey preenchidos automaticamente pelo loader via $env:MALIKIA_URL
+    URL            = if ($env:MALIKIA_URL)    { $env:MALIKIA_URL }    else { "" }
+    APIKey         = if ($env:MALIKIA_APIKEY) { $env:MALIKIA_APIKEY } else { "malikia-dev-2025" }
 
     # Estado
-    Ativo          = $false   # ativado se URL e Key estiverem configurados
-    SessionId      = $null    # UUID retornado pelo Supabase apos envio
-    InsightCache   = $null    # insight baixado para o hardware atual
+    Ativo          = $false
+    SessionId      = $null
+    InsightCache   = $null
     UltimoEnvio    = $null
 }
 
-# Ativar se configurado
-$Script:MalikIA.Ativo = (
-    $Script:MalikIA.SupabaseURL -match "supabase\.co" -and
-    $Script:MalikIA.SupabaseAnonKey -notmatch "SUA-ANON"
-)
+# Ativar se loader passou a URL do servidor
+$Script:MalikIA.Ativo = ($Script:MalikIA.URL -ne "" -and $Script:MalikIA.URL -match "http")
 
 # ================================================================
 #  REGION: HELPER HTTP - compativel com fileless (sem modulos externos)
