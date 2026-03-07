@@ -298,6 +298,10 @@ function Start-AbimalekBoost {
         exit 1
     }
 
+    # Liberar execução para este processo
+    Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -EA SilentlyContinue
+    Unblock-File -Path $ScriptPath -EA SilentlyContinue
+
     # Executar
     & $ScriptPath
 }
@@ -346,6 +350,9 @@ function Show-LoaderMenu {
 # ================================================================
 #  MAIN
 # ================================================================
+# Liberar execução de scripts para este processo
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -EA SilentlyContinue
+
 Write-Header
 
 $alreadyInstalled = Test-Path $ScriptPath
@@ -365,6 +372,8 @@ switch ($action) {
         }
         Write-Step 5 5 "Iniciando AbimalekBoost..."
         Write-Host ""
+        Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -EA SilentlyContinue
+        Unblock-File -Path $ScriptPath -EA SilentlyContinue
         & $ScriptPath
     }
 
