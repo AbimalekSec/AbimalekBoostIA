@@ -258,10 +258,9 @@ function Start-MalikServer {
             $health = $test.Content | ConvertFrom-Json
             if ($health.status -eq "ok") {
                 Write-OK "MalikIA online: $($remote.URL)"
-                # Salvar URL no script para uso posterior
-                $Script:MalikIA.URL    = $remote.URL
-                $Script:MalikIA.APIKey = $remote.APIKey
-                $Script:MalikIA.Ativo  = $true
+                # Guardar URL em variável global para o script principal usar
+                $env:MALIKIA_URL    = $remote.URL
+                $env:MALIKIA_APIKEY = $remote.APIKey
                 return $true
             }
         } catch {}
@@ -276,15 +275,13 @@ function Start-MalikServer {
         try {
             $test = Invoke-WebRequest "http://localhost:8000/health" -UseBasicParsing -TimeoutSec 2 -EA Stop
             Write-OK "MalikIA local: http://localhost:8000"
-            $Script:MalikIA.URL   = "http://localhost:8000"
-            $Script:MalikIA.Ativo = $true
+            $env:MALIKIA_URL = "http://localhost:8000"
             return $true
         } catch {}
     }
 
     # 3. Sem servidor — modo offline (script funciona normalmente)
     Write-Info "Modo offline — otimizações locais sem ML"
-    $Script:MalikIA.Ativo = $false
     return $false
 }
 
