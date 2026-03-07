@@ -81,7 +81,7 @@ Clear-Host
 # ================================================================
 #  VARIAVEIS GLOBAIS
 # ================================================================
-$Script:Versao      = "7.3.1"
+$Script:Versao      = "7.3.2"
 $Script:NomeProg    = "AbimalekBoost"
 $Script:IDSessao    = (New-Guid).ToString("N").Substring(0,8).ToUpper()
 
@@ -1288,7 +1288,12 @@ function Invoke-GameOptimization {
                 IN "Timer Resolution..."
                 Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\kernel" -Name "GlobalTimerResolutionRequests" -Value 1 -Type DWord -Force 2>$null
                 bcdedit /set disabledynamictick yes 2>$null | Out-Null
-                if (-not $Script:IsWin11) { bcdedit /set useplatformtick yes 2>$null | Out-Null }
+                # Win10: useplatformtick melhora timer. Win11: NAO usar, piora.
+                if (-not $Script:IsWin11) {
+                    bcdedit /set useplatformtick yes 2>$null | Out-Null
+                    # Garantir que deletevalue nao foi aplicado antes
+                    bcdedit /deletevalue {current} useplatformclock 2>$null | Out-Null
+                }
                 OK "Timer: resolucao maxima ativada"
                 $tweaksAplicados.Add($tweakId) | Out-Null
             }
@@ -2571,15 +2576,26 @@ function Invoke-TimerResolution {
             Desc  = "Remove forcos de platform tick - Win11 ja gerencia timer corretamente"
             Risco = "baixo"
             Bloco = {
-                if ($Script:IsWin11) { bcdedit /deletevalue {current} useplatformtick  2>$null | Out-Null }
-                bcdedit /deletevalue {current} useplatformclock 2>$null | Out-Null
+                # Apenas Win11 - no Win10 deletar useplatformtick piora o timer de 5ms para 15ms
+                if ($Script:IsWin11) {
+                    bcdedit /deletevalue {current} useplatformtick  2>$null | Out-Null
+                    bcdedit /deletevalue {current} useplatformclock 2>$null | Out-Null
+                } else {
+                    # Win10: garantir que useplatformtick esta ativo (melhora timer)
+                    bcdedit /set useplatformtick yes 2>$null | Out-Null
+                }
             }
         }
         @{
             Nome  = "Platform Clock OFF (Win11 22H2+)"
             Desc  = "Remove Platform Clock que causa stuttering em alguns jogos"
             Risco = "medio"
-            Bloco = { bcdedit /deletevalue {current} useplatformclock 2>$null | Out-Null }
+            Bloco = {
+                # Apenas Win11 - Win10 nao tem este parametro e o delete piora timer
+                if ($Script:IsWin11) {
+                    bcdedit /deletevalue {current} useplatformclock 2>$null | Out-Null
+                }
+            }
         }
         @{
             Nome  = "Platform Performance Counters ON"
