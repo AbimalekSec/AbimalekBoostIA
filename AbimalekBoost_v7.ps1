@@ -81,7 +81,7 @@ Clear-Host
 # ================================================================
 #  VARIAVEIS GLOBAIS
 # ================================================================
-$Script:Versao      = "7.3.0"
+$Script:Versao      = "7.3.1"
 $Script:NomeProg    = "AbimalekBoost"
 $Script:IDSessao    = (New-Guid).ToString("N").Substring(0,8).ToUpper()
 
@@ -588,7 +588,7 @@ function Load-MalikConfig {
 #  envia para analise ML e aplica otimizacoes cirurgicas
 # ================================================================
 
-# ?? Perfis de jogos conhecidos ???????????????????????????????????
+# -- Perfis de jogos conhecidos -----------------------------------
 $Script:GameProfiles = @{
     "FiveM" = @{
         Processos    = @("FiveM", "FiveM_b2372_GTAProcess", "GTA5", "fivem_service_unhandled")
@@ -654,7 +654,7 @@ $Script:GameProfiles = @{
     }
 }
 
-# ?? Estado da sessao ao vivo ?????????????????????????????????????
+# -- Estado da sessao ao vivo -------------------------------------
 $Script:LiveSession = @{
     JogoDetectado  = $null
     JogoPerfil     = $null
@@ -667,9 +667,9 @@ $Script:LiveSession = @{
     Analise        = $null  # resultado da analise ML
 }
 
-# ????????????????????????????????????????????????????????????????
+# ================================================================
 #  DETECTAR JOGO ABERTO
-# ????????????????????????????????????????????????????????????????
+# ================================================================
 function Find-GameRunning {
     $processos = Get-Process -EA SilentlyContinue
 
@@ -689,9 +689,9 @@ function Find-GameRunning {
     return $null
 }
 
-# ????????????????????????????????????????????????????????????????
+# ================================================================
 #  CAPTURAR UMA AMOSTRA - metricas completas num instante
-# ????????????????????????????????????????????????????????????????
+# ================================================================
 function Get-GameSample {
     param(
         [System.Diagnostics.Process]$GameProc,
@@ -736,7 +736,7 @@ function Get-GameSample {
         Alert        = @()
     }
 
-    # ?? CPU total ????????????????????????????????????????????
+    # -- CPU total --------------------------------------------
     try {
         $cpuPct = (Get-Counter "\Processor(_Total)\% Processor Time" -EA SilentlyContinue).CounterSamples.CookedValue
         $sample.CPUTotal = [math]::Round($cpuPct, 1)
@@ -747,7 +747,7 @@ function Get-GameSample {
         }
     } catch {}
 
-    # ?? CPU do processo do jogo ??????????????????????????????
+    # -- CPU do processo do jogo ------------------------------
     try {
         if ($GameProc -and -not $GameProc.HasExited) {
             $GameProc.Refresh()
@@ -762,7 +762,7 @@ function Get-GameSample {
         }
     } catch {}
 
-    # ?? RAM sistema ??????????????????????????????????????????
+    # -- RAM sistema ------------------------------------------
     try {
         $os = Get-CimInstance Win32_OperatingSystem -EA SilentlyContinue
         if ($os) {
@@ -773,7 +773,7 @@ function Get-GameSample {
         }
     } catch {}
 
-    # ?? GPU via nvidia-smi (NVIDIA) ??????????????????????????
+    # -- GPU via nvidia-smi (NVIDIA) --------------------------
     $smiOk = $false
     try {
         $smiCmd = Get-Command "nvidia-smi" -EA SilentlyContinue
@@ -796,7 +796,7 @@ function Get-GameSample {
         }
     } catch {}
 
-    # ?? GPU via WMI fallback ?????????????????????????????????
+    # -- GPU via WMI fallback ---------------------------------
     if (-not $smiOk) {
         try {
             # Temperatura via ACPI
@@ -810,7 +810,7 @@ function Get-GameSample {
         } catch {}
     }
 
-    # ?? MSI Afterburner (se instalado) ??????????????????????
+    # -- MSI Afterburner (se instalado) ----------------------
     try {
         $msiReg = Get-ItemProperty "HKLM:\SOFTWARE\MSI\Afterburner" -EA SilentlyContinue
         if ($msiReg) {
@@ -819,7 +819,7 @@ function Get-GameSample {
         }
     } catch {}
 
-    # ?? FPS via PDH - FrameTime do processo do jogo ?????????
+    # -- FPS via PDH - FrameTime do processo do jogo ---------
     try {
         if ($GameProc -and -not $GameProc.HasExited) {
             # Tentar via contador de frames do Direct3D
@@ -838,19 +838,19 @@ function Get-GameSample {
         }
     } catch {}
 
-    # ?? Disk Queue ???????????????????????????????????????????
+    # -- Disk Queue -------------------------------------------
     try {
         $dq = (Get-Counter "\PhysicalDisk(_Total)\Avg. Disk Queue Length" -EA SilentlyContinue).CounterSamples.CookedValue
         $sample.DiskQueueLen = [math]::Round($dq, 2)
     } catch {}
 
-    # ?? Ping rapido ??????????????????????????????????????????
+    # -- Ping rapido ------------------------------------------
     try {
         $ping = Test-Connection "8.8.8.8" -Count 1 -EA SilentlyContinue
         $sample.PingMS = if ($ping) { $ping.ResponseTime } else { 999 }
     } catch { $sample.PingMS = 999 }
 
-    # ?? Alertas desta amostra ????????????????????????????????
+    # -- Alertas desta amostra --------------------------------
     $thresh = $Script:LiveSession.JogoPerfil.Thresholds
     if ($thresh) {
         if ($sample.CPUGame   -gt $thresh.CPUGamePct)   { $sample.Alert += "CPU_GAME_HIGH" }
@@ -865,23 +865,23 @@ function Get-GameSample {
     return $sample
 }
 
-# ????????????????????????????????????????????????????????????????
+# ================================================================
 #  SESSAO DE CAPTURA COMPLETA - loop principal
-# ????????????????????????????????????????????????????????????????
+# ================================================================
 function Start-GameSession {
     param(
         [int]$DuracaoSeg = 120,   # 2 minutos padrao
         [switch]$Silent
     )
 
-    # ?? Detectar jogo ????????????????????????????????????????
+    # -- Detectar jogo ----------------------------------------
     $found = Find-GameRunning
     if (-not $found) {
         H2 "NENHUM JOGO DETECTADO"
         Write-Host ""
         Write-Host "  Abra um dos jogos suportados e tente novamente:" -ForegroundColor Yellow
         foreach ($j in $Script:GameProfiles.Keys) {
-            Write-Host "    ? $($Script:GameProfiles[$j].DisplayName)" -ForegroundColor White
+            Write-Host "    * $($Script:GameProfiles[$j].DisplayName)" -ForegroundColor White
         }
         Write-Host ""
         Write-Host "  Ou use [J] para informar o jogo manualmente." -ForegroundColor DarkGray
@@ -903,9 +903,9 @@ function Start-GameSession {
     $totalAmostras = [math]::Ceiling($DuracaoSeg / $Script:LiveSession.IntervalSec)
 
     Write-Host ""
-    Write-Host "  ????????????????????????????????????????????????????????" -ForegroundColor Cyan
-    Write-Host "  ?   MALIKIA - ANALISE AO VIVO COM JOGO ABERTO         ?" -ForegroundColor Cyan
-    Write-Host "  ????????????????????????????????????????????????????????" -ForegroundColor Cyan
+    Write-Host "  +======================================================+" -ForegroundColor Cyan
+    Write-Host "  |   MALIKIA - ANALISE AO VIVO COM JOGO ABERTO         |" -ForegroundColor Cyan
+    Write-Host "  +======================================================+" -ForegroundColor Cyan
     Write-Host ""
     Write-Host ("  JOGO DETECTADO : {0}" -f $perfil.DisplayName)  -ForegroundColor Green
     Write-Host ("  ENGINE         : {0}" -f $perfil.Engine)        -ForegroundColor White
@@ -923,7 +923,7 @@ function Start-GameSession {
     }
     Write-Host ""
 
-    # ?? Loop de coleta ???????????????????????????????????????
+    # -- Loop de coleta ---------------------------------------
     $amostrasColetadas = 0
     $barWidth = 40
 
@@ -938,10 +938,10 @@ function Start-GameSession {
         $Script:LiveSession.Amostras.Add($sample) | Out-Null
         $amostrasColetadas++
 
-        # ?? Display em tempo real ?????????????????????????
+        # -- Display em tempo real -------------------------
         $pct     = [math]::Round(($i + 1) / $totalAmostras * 100)
         $filled  = [math]::Round($barWidth * $pct / 100)
-        $bar     = ("?" * $filled) + ("?" * ($barWidth - $filled))
+        $bar     = ("#" * $filled) + ("-" * ($barWidth - $filled))
         $elapsed = [math]::Round(($i + 1) * $Script:LiveSession.IntervalSec)
         $remain  = $DuracaoSeg - $elapsed
 
@@ -960,13 +960,13 @@ function Start-GameSession {
         Write-Host ("  CPU: {0,5:F1}% (jogo: {1,4:F1}%)  |  " -f $sample.CPUTotal, $sample.CPUGame) -NoNewline -ForegroundColor $cpuColor
         Write-Host ("RAM: {0,4:F1}%  |  " -f $sample.RAMUsoPct) -NoNewline -ForegroundColor $ramColor
         Write-Host ("PING: {0,3}ms" -f $sample.PingMS) -ForegroundColor $netColor
-        Write-Host ("  GPU: {0,3}% uso  |  TEMP: {1,2}?C  |  VRAM: {2}/{3} MB" -f `
+        Write-Host ("  GPU: {0,3}% uso  |  TEMP: {1,2} grausC  |  VRAM: {2}/{3} MB" -f `
             $sample.GPUUsoPct, $sample.GPUTempC, $sample.GPUMemUsedMB, $sample.GPUMemTotalMB) -ForegroundColor $gpuColor
 
         if ($sample.Alert.Count -gt 0) {
-            Write-Host ("  ?  {0}" -f ($sample.Alert -join " | ")) -ForegroundColor Red
+            Write-Host ("  [!]  {0}" -f ($sample.Alert -join " | ")) -ForegroundColor Red
         } else {
-            Write-Host "  ?  Tudo dentro do normal" -ForegroundColor DarkGreen
+            Write-Host "  [OK]  Tudo dentro do normal" -ForegroundColor DarkGreen
         }
 
         # Mover cursor de volta para sobrescrever na proxima iteracao
@@ -985,10 +985,10 @@ function Start-GameSession {
     Write-Host "  Analisando com MalikIA..." -ForegroundColor Cyan
     Write-Host ""
 
-    # ?? Calcular estatisticas da sessao ??????????????????????
+    # -- Calcular estatisticas da sessao ----------------------
     $analise = Measure-GameSessionStats
 
-    # ?? Enviar para MalikIA Python e receber diagnostico ?????
+    # -- Enviar para MalikIA Python e receber diagnostico -----
     $diagnostico = Send-GameSession -Analise $analise
 
     if ($diagnostico) {
@@ -1002,9 +1002,9 @@ function Start-GameSession {
     return $analise
 }
 
-# ????????????????????????????????????????????????????????????????
+# ================================================================
 #  CALCULAR ESTATISTICAS DA SESSAO
-# ????????????????????????????????????????????????????????????????
+# ================================================================
 function Measure-GameSessionStats {
     $amostras = $Script:LiveSession.Amostras
     if ($amostras.Count -eq 0) { return $null }
@@ -1063,7 +1063,7 @@ function Measure-GameSessionStats {
     $gpuThrottleCount = ($amostras | Where-Object { $_.GPUThrottle }).Count
     if ($gpuThrottleCount -gt $n * 0.3) { $gargalos.Add(@{ Tipo="GPU_THROTTLE"; Severidade="Alta"; Desc="GPU fazendo throttle em $($gpuThrottleCount) amostras - thermal ou power limit" }) }
     $gpuTempStats = Stats $gpuTemp
-    if ($gpuTempStats.P95 -gt 85)       { $gargalos.Add(@{ Tipo="GPU_TEMP";  Severidade="Media"; Desc="GPU quente ($($gpuTempStats.Max)?C max) - limpeza de cooler recomendada" }) }
+    if ($gpuTempStats.P95 -gt 85)       { $gargalos.Add(@{ Tipo="GPU_TEMP";  Severidade="Media"; Desc="GPU quente ($($gpuTempStats.Max) grausC max) - limpeza de cooler recomendada" }) }
 
     # Calcular FPS stats
     $fpsStats = if ($fps -and $fps.Count -gt 0) { Stats $fps } else { $null }
@@ -1098,9 +1098,9 @@ function Measure-GameSessionStats {
     return $statsResultado
 }
 
-# ????????????????????????????????????????????????????????????????
+# ================================================================
 #  ENVIAR SESSAO PARA MALIKIA PYTHON
-# ????????????????????????????????????????????????????????????????
+# ================================================================
 function Send-GameSession {
     param($Analise)
 
@@ -1125,13 +1125,13 @@ function Send-GameSession {
     }
 }
 
-# ????????????????????????????????????????????????????????????????
+# ================================================================
 #  EXIBIR DIAGNOSTICO - resposta da MalikIA Python
-# ????????????????????????????????????????????????????????????????
+# ================================================================
 function Show-GameDiagnostico {
     param($diag)
 
-    $sep = "  " + ("?" * 56)
+    $sep = "  " + ("=" * 56)
     Write-Host $sep -ForegroundColor Magenta
     Write-Host "  MALIKIA - DIAGNOSTICO CIRURGICO" -ForegroundColor Magenta
     Write-Host "  $($diag.jogo)  |  $($diag.engine)" -ForegroundColor White
@@ -1160,15 +1160,15 @@ function Show-GameDiagnostico {
     Write-Host $sep -ForegroundColor Magenta
 }
 
-# ????????????????????????????????????????????????????????????????
+# ================================================================
 #  DIAGNOSTICO LOCAL - quando API offline
-# ????????????????????????????????????????????????????????????????
+# ================================================================
 function Show-GameDiagnosticoLocal {
     param($stats)
 
     if (-not $stats) { return }
 
-    $sep = "  " + ("?" * 56)
+    $sep = "  " + ("=" * 56)
     Write-Host $sep -ForegroundColor Cyan
     Write-Host "  DIAGNOSTICO LOCAL - $($stats.Jogo)" -ForegroundColor Cyan
     Write-Host $sep -ForegroundColor Cyan
@@ -1179,7 +1179,7 @@ function Show-GameDiagnosticoLocal {
     Write-Host ("  CPU Total   media:{0,5:F1}%   P95:{1,5:F1}%" -f $stats.CPU.Media,  $stats.CPU.P95)    -ForegroundColor $(if($stats.CPU.P95 -gt 85){"Red"}else{"Green"})
     Write-Host ("  CPU Jogo    media:{0,5:F1}%   P95:{1,5:F1}%" -f $stats.CPUGame.Media, $stats.CPUGame.P95) -ForegroundColor $(if($stats.CPUGame.P95 -gt 75){"Yellow"}else{"Green"})
     Write-Host ("  GPU Uso     media:{0,5:F1}%   P95:{1,5:F1}%" -f $stats.GPU.Media,  $stats.GPU.P95)    -ForegroundColor $(if($stats.GPU.P95 -gt 95){"Red"}elseif($stats.GPU.P95 -gt 80){"Yellow"}else{"Green"})
-    Write-Host ("  GPU Temp    media:{0,5:F1}?C  max:{1,5:F1}?C"  -f $stats.GPUTemp.Media, $stats.GPUTemp.Max) -ForegroundColor $(if($stats.GPUTemp.Max -gt 85){"Red"}else{"Green"})
+    Write-Host ("  GPU Temp    media:{0,5:F1} grausC  max:{1,5:F1} grausC"  -f $stats.GPUTemp.Media, $stats.GPUTemp.Max) -ForegroundColor $(if($stats.GPUTemp.Max -gt 85){"Red"}else{"Green"})
     Write-Host ("  RAM         media:{0,5:F1}%   P95:{1,5:F1}%" -f $stats.RAM.Media, $stats.RAM.P95)    -ForegroundColor $(if($stats.RAM.P95 -gt 80){"Red"}else{"Green"})
     Write-Host ("  Ping        media:{0,5}ms    P95:{1,5}ms"    -f $stats.Ping.Media,$stats.Ping.P95)   -ForegroundColor $(if($stats.Ping.P95 -gt 80){"Red"}elseif($stats.Ping.P95 -gt 40){"Yellow"}else{"Green"})
     if ($stats.FPS) {
@@ -1192,7 +1192,7 @@ function Show-GameDiagnosticoLocal {
         Write-Host "  GARGALOS IDENTIFICADOS:" -ForegroundColor Red
         foreach ($g in $stats.Gargalos) {
             $cor = if ($g.Severidade -eq "Alta") { "Red" } else { "Yellow" }
-            Write-Host "  ? $($g.Desc)" -ForegroundColor $cor
+            Write-Host "  > $($g.Desc)" -ForegroundColor $cor
         }
         Write-Host ""
     }
@@ -1207,9 +1207,9 @@ function Show-GameDiagnosticoLocal {
     Write-Host $sep -ForegroundColor Cyan
 }
 
-# ????????????????????????????????????????????????????????????????
+# ================================================================
 #  APLICAR OTIMIZACOES BASEADAS NO DIAGNOSTICO
-# ????????????????????????????????????????????????????????????????
+# ================================================================
 function Invoke-GameOptimization {
     param($Stats)
 
@@ -1347,8 +1347,8 @@ function Invoke-GameOptimization {
 
     Write-Host ""
     Write-Host "  RESULTADO IMEDIATO:" -ForegroundColor Cyan
-    Write-Host ("  Score: {0} ? {1} ({2}{3} pts)" -f $snapAntes.Score.Geral, $snapDepois.Score.Geral, $ganhoSign, $ganhoScore) -ForegroundColor $(if($ganhoScore -gt 0){"Green"}else{"Yellow"})
-    Write-Host ("  Timer: {0:F2}ms ? {1:F2}ms" -f $snapAntes.TimerResMS, $snapDepois.TimerResMS) -ForegroundColor Green
+    Write-Host ("  Score: {0} -> {1} ({2}{3} pts)" -f $snapAntes.Score.Geral, $snapDepois.Score.Geral, $ganhoSign, $ganhoScore) -ForegroundColor $(if($ganhoScore -gt 0){"Green"}else{"Yellow"})
+    Write-Host ("  Timer: {0:F2}ms -> {1:F2}ms" -f $snapAntes.TimerResMS, $snapDepois.TimerResMS) -ForegroundColor Green
     Write-Host ""
     Write-Host "  IMPORTANTE: Reinicie para que todas as mudancas tenham efeito." -ForegroundColor Yellow
     Write-Host "  Os ganhos reais de FPS aparecerao na proxima sessao de jogo." -ForegroundColor DarkGray
@@ -1357,15 +1357,15 @@ function Invoke-GameOptimization {
     PAUSE
 }
 
-# ????????????????????????????????????????????????????????????????
+# ================================================================
 #  MENU PRINCIPAL - ANALISE AO VIVO
-# ????????????????????????????????????????????????????????????????
+# ================================================================
 function Show-MenuGameAnalysis {
     while ($true) {
         Show-Banner
         H1 "ANALISE AO VIVO COM JOGO ABERTO"
         Write-Host "  MalikIA analisa seu PC enquanto voce joga." -ForegroundColor DarkGray
-        Write-Host "  Gargalos reais ? otimizacoes cirurgicas." -ForegroundColor DarkGray
+        Write-Host "  Gargalos reais -> otimizacoes cirurgicas." -ForegroundColor DarkGray
         Write-Host ""
 
         # Status do jogo aberto
@@ -1439,8 +1439,8 @@ function Show-MenuGameAnalysis {
                 Write-Host ""
                 while (-not $found2.Processo.HasExited) {
                     $s = Get-GameSample -GameProc $found2.Processo -GameName $found2.Jogo
-                    $alertStr = if ($s.Alert.Count -gt 0) { " ? " + ($s.Alert -join "|") } else { " ?" }
-                    Write-Host ("`r  [{0}] CPU:{1,5:F1}% GPU:{2,3}%@{3,2}?C RAM:{4,4:F1}% PING:{5,3}ms{6}" -f `
+                    $alertStr = if ($s.Alert.Count -gt 0) { " [!] " + ($s.Alert -join "|") } else { " [OK]" }
+                    Write-Host ("`r  [{0}] CPU:{1,5:F1}% GPU:{2,3}%@{3,2} grausC RAM:{4,4:F1}% PING:{5,3}ms{6}" -f `
                         $s.Timestamp, $s.CPUTotal, $s.GPUUsoPct, $s.GPUTempC, $s.RAMUsoPct, $s.PingMS, $alertStr) -NoNewline
                     Start-Sleep -Seconds $Script:LiveSession.IntervalSec
                 }
@@ -3508,7 +3508,7 @@ function Invoke-Restaurar {
 function Invoke-AplicarTudo {
     # ================================================================
     #  APLICAR TUDO v7 - IA MEDE PRIMEIRO, DECIDE, APLICA
-    #  Ordem correta: snapshot virgem ? decisao ? tweaks ? snapshot final
+    #  Ordem correta: snapshot virgem -> decisao -> tweaks -> snapshot final
     # ================================================================
     Clear-Host
     if (-not $Script:CPUNome) { Invoke-DetectarHardware }
@@ -3534,7 +3534,7 @@ function Invoke-AplicarTudo {
     Write-Host ""
     if (-not (CONF "Iniciar otimizacao inteligente com perfil $Perfil?")) { WN "Cancelado."; PAUSE; return }
 
-    # ?? FASE 0: Criar backup e ponto de restauracao ??????????????
+    # -- FASE 0: Criar backup e ponto de restauracao --------------
     Write-Host ""
     Write-Host "  $("="*70)" -ForegroundColor DarkCyan
     Write-Host "  [FASE 0/5] SEGURANCA - BACKUP E RESTAURACAO" -ForegroundColor Yellow
@@ -3542,7 +3542,7 @@ function Invoke-AplicarTudo {
     Invoke-IARestauracao
     Invoke-IABackupRegistro
 
-    # ?? FASE 1: Snapshot VIRGEM - antes de qualquer tweak ????????
+    # -- FASE 1: Snapshot VIRGEM - antes de qualquer tweak --------
     Write-Host ""
     Write-Host "  $("="*70)" -ForegroundColor DarkCyan
     Write-Host "  [FASE 1/5] MEDINDO O ESTADO REAL DO SEU PC..." -ForegroundColor Cyan
@@ -3557,7 +3557,7 @@ function Invoke-AplicarTudo {
     $snap = $Script:IA.SnapshotAntes
     Show-IAAnalise -snap $snap
 
-    # ?? FASE 2: Motor de decisao ??????????????????????????????????
+    # -- FASE 2: Motor de decisao ----------------------------------
     Write-Host ""
     Write-Host "  $("="*70)" -ForegroundColor DarkCyan
     Write-Host "  [FASE 2/5] IA DECIDINDO O QUE APLICAR..." -ForegroundColor Cyan
@@ -3649,7 +3649,7 @@ function Invoke-AplicarTudo {
         WN "Cancelado."; PAUSE; return
     }
 
-    # ?? FASE 3: Aplicar modulos manuais ??????????????????????????
+    # -- FASE 3: Aplicar modulos manuais --------------------------
     Write-Host ""
     Write-Host "  $("="*70)" -ForegroundColor DarkCyan
     Write-Host "  [FASE 3/5] APLICANDO MODULOS SELECIONADOS PELA IA..." -ForegroundColor Cyan
@@ -3681,7 +3681,7 @@ function Invoke-AplicarTudo {
         }
     }
 
-    # ?? FASE 4: Tweaks do motor IA ????????????????????????????????
+    # -- FASE 4: Tweaks do motor IA --------------------------------
     Write-Host ""
     Write-Host "  $("="*70)" -ForegroundColor DarkCyan
     Write-Host "  [FASE 4/5] TWEAKS CIRURGICOS DO MOTOR IA..." -ForegroundColor Cyan
@@ -3705,7 +3705,7 @@ function Invoke-AplicarTudo {
     ipconfig /flushdns 2>$null | Out-Null
     OK "DNS flushed"
 
-    # ?? FASE 5: Snapshot final - medir o ganho real ???????????????
+    # -- FASE 5: Snapshot final - medir o ganho real ---------------
     Write-Host ""
     Write-Host "  $("="*70)" -ForegroundColor DarkCyan
     Write-Host "  [FASE 5/5] MEDINDO RESULTADO..." -ForegroundColor Cyan
@@ -4611,7 +4611,7 @@ function Get-IASnapshot {
         Score = @{ Geral=0; Latencia=0; Responsividade=0; Gamer=0; Thermal=0 }
     }
 
-    # ?? CPU uso + clock atual ?????????????????????????????????
+    # -- CPU uso + clock atual ---------------------------------
     try {
         $cpuObj = Get-CimInstance Win32_Processor -EA SilentlyContinue | Select -First 1
         if ($cpuObj) {
@@ -4623,13 +4623,13 @@ function Get-IASnapshot {
         }
     } catch {}
 
-    # ?? Core Parking ?????????????????????????????????????????
+    # -- Core Parking -----------------------------------------
     try {
         $p = Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\54533251-82be-4824-96c1-47b60b740d00\0cc5b647-c1df-4637-891a-dec35c318583" -EA SilentlyContinue
         $snap.CPUCoreParking = ($p -eq $null -or [int]$p.ValueMax -lt 100)
     } catch {}
 
-    # ?? Thermal Throttling (NOVO) ?????????????????????????????
+    # -- Thermal Throttling (NOVO) -----------------------------
     # Detecta se o CPU esta sendo limitado por temperatura
     try {
         $thermalZones = Get-CimInstance -Namespace root/WMI -ClassName MSAcpi_ThermalZoneTemperature -EA SilentlyContinue
@@ -4644,7 +4644,7 @@ function Get-IASnapshot {
         if ($throttleEvent) { $snap.CPUThermalThrot = $true }
     } catch {}
 
-    # ?? Intel E/P Cores (NOVO) ???????????????????????????????
+    # -- Intel E/P Cores (NOVO) -------------------------------
     # Intel 12a gen+ tem Performance cores e Efficiency cores
     try {
         if ($Script:CPUFab -eq "Intel" -and $Script:CPUGen -ge 12) {
@@ -4661,7 +4661,7 @@ function Get-IASnapshot {
         }
     } catch {}
 
-    # ?? RAM ??????????????????????????????????????????????????
+    # -- RAM --------------------------------------------------
     try {
         $os = Get-CimInstance Win32_OperatingSystem -EA SilentlyContinue
         if ($os) {
@@ -4682,7 +4682,7 @@ function Get-IASnapshot {
         $snap.RAMCompressao = ($null -ne (Get-Process "Memory Compression" -EA SilentlyContinue))
     } catch {}
 
-    # ?? GPU Temperature + Throttle (NOVO) ???????????????????
+    # -- GPU Temperature + Throttle (NOVO) -------------------
     try {
         # NVIDIA via nvidia-smi
         $smi = Get-Command "nvidia-smi" -EA SilentlyContinue
@@ -4702,13 +4702,13 @@ function Get-IASnapshot {
         if ($snap.GPUTemp -gt 85) { $snap.GPUThrottle = $true }
     } catch {}
 
-    # ?? Disk I/O ?????????????????????????????????????????????
+    # -- Disk I/O ---------------------------------------------
     try {
         $snap.DiskQueueLen = [math]::Round(
             (Get-Counter "\PhysicalDisk(_Total)\Avg. Disk Queue Length" -EA SilentlyContinue).CounterSamples.CookedValue, 2)
     } catch { $snap.DiskQueueLen = 0.0 }
 
-    # ?? Rede ?????????????????????????????????????????????????
+    # -- Rede -------------------------------------------------
     try {
         $pings = 1..5 | ForEach-Object {
             $r = Test-Connection "8.8.8.8" -Count 1 -EA SilentlyContinue
@@ -4728,7 +4728,7 @@ function Get-IASnapshot {
         $snap.TCPAutotuning = if ($tcp -match "normal") { "Normal" } elseif ($tcp -match "disabled") { "Disabled" } else { "Unknown" }
     } catch {}
 
-    # ?? Timer Resolution ?????????????????????????????????????
+    # -- Timer Resolution -------------------------------------
     try {
         $sw = [System.Diagnostics.Stopwatch]::StartNew()
         Start-Sleep -Milliseconds 15
@@ -4737,7 +4737,7 @@ function Get-IASnapshot {
         if ($snap.TimerResMS -lt 0) { $snap.TimerResMS = 0.5 }
     } catch {}
 
-    # ?? Plano de Energia ?????????????????????????????????????
+    # -- Plano de Energia -------------------------------------
     try {
         $plano = powercfg /getactivescheme 2>$null
         $snap.PlanoEnergia = if ($plano -match "Ultimate") { "Ultimate Performance" }
@@ -4748,45 +4748,45 @@ function Get-IASnapshot {
                              else { ($plano -split '\(')[0].Trim() }
     } catch {}
 
-    # ?? Servicos e processos pesados ?????????????????????????
+    # -- Servicos e processos pesados -------------------------
     try {
         $snap.ServicosAtivos = (Get-Service -EA SilentlyContinue | Where-Object { $_.Status -eq "Running" }).Count
         $snap.ProcessosPes   = (Get-Process -EA SilentlyContinue | Sort-Object CPU -Descending |
             Select-Object -First 8 | Select-Object -ExpandProperty ProcessName)
     } catch {}
 
-    # ?? MMCSS configurado (NOVO) ?????????????????????????????
+    # -- MMCSS configurado (NOVO) -----------------------------
     try {
         $mmcss = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" -EA SilentlyContinue
         $snap.MMCSSConfigurado = ($mmcss -and $mmcss.Priority -ge 6)
     } catch {}
 
-    # ?? Power Throttling ativo (NOVO) ????????????????????????
+    # -- Power Throttling ativo (NOVO) ------------------------
     try {
         $pt = Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling" -EA SilentlyContinue
         $snap.PowerThrottle = ($pt -eq $null -or $pt.PowerThrottlingOff -ne 1)
     } catch { $snap.PowerThrottle = $true }
 
-    # ?? Spectre/Meltdown mitigacoes (NOVO) ???????????????????
+    # -- Spectre/Meltdown mitigacoes (NOVO) -------------------
     try {
         $spec = Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" -EA SilentlyContinue
         $snap.SpectreAtivo = ($spec -eq $null -or $spec.FeatureSettingsOverride -ne 3)
     } catch {}
 
-    # ?? Hibernacao ativa (NOVO) ??????????????????????????????
+    # -- Hibernacao ativa (NOVO) ------------------------------
     try {
         $hibFile = Test-Path "$env:SystemDrive\hiberfil.sys"
         $snap.HibernacaoAtiva = $hibFile
     } catch {}
 
-    # ?? DPC Latency alta (NOVO) ??????????????????????????????
+    # -- DPC Latency alta (NOVO) ------------------------------
     # Detecta via event log e via IRQ sharing
     try {
         $dpcEvents = Get-WinEvent -FilterHashtable @{LogName='System'; ProviderName='Microsoft-Windows-Kernel-Power'; Id=41} -MaxEvents 5 -EA SilentlyContinue
         $snap.DPCLatencyHigh = ($dpcEvents -and $dpcEvents.Count -gt 0)
     } catch {}
 
-    # ?? Calcular Score ???????????????????????????????????????
+    # -- Calcular Score ---------------------------------------
     $snap.Score = Measure-PerformanceScore $snap
 
     return $snap
@@ -4892,7 +4892,7 @@ function Invoke-IAMotorDecisao {
     $Script:IA.OtimizacoesDecididas.Clear()
     $Script:IA.Gargalo = @()
 
-    # ?? Detectar gargalos ????????????????????????????????????
+    # -- Detectar gargalos ------------------------------------
     $gargalos = [System.Collections.Generic.List[string]]::new()
     if ($snap.CPUUsoPct        -gt 60)   { $gargalos.Add("CPU-bound")        }
     if ($snap.RAMUsoPct        -gt 70 -or $snap.RAMPaginando) { $gargalos.Add("RAM-limitada") }
@@ -4904,7 +4904,7 @@ function Invoke-IAMotorDecisao {
     if ($snap.CPUEPCores -and -not $snap.MMCSSConfigurado) { $gargalos.Add("Intel-EP-sem-afinidade") } # NOVO
     $Script:IA.Gargalo = $gargalos.ToArray()
 
-    # ?? Carregar aprendizado: saber o que funcionou ??????????
+    # -- Carregar aprendizado: saber o que funcionou ----------
     Load-IAHistorico
     $hist = $Script:IA.Historico
     $tweaksEficazes = @{}   # tweak_id -> ganho_medio_quando_aplicado
@@ -4917,11 +4917,11 @@ function Invoke-IAMotorDecisao {
         }
     }
 
-    # ?? Regras - estrutura: Id, Desc, Prio, Perfis, Risco, Cond, Bloco ??
+    # -- Regras - estrutura: Id, Desc, Prio, Perfis, Risco, Cond, Bloco --
 
     $regras = @(
 
-        # ?? PRIORIDADE 1: CRITICO ?????????????????????????????
+        # -- PRIORIDADE 1: CRITICO -----------------------------
         @{
             Id    = "PLANO_ULTIMATE"
             Desc  = "Ativar Ultimate Performance"
@@ -4985,7 +4985,7 @@ function Invoke-IAMotorDecisao {
             }
         }
 
-        # ?? PRIORIDADE 2: ALTO ????????????????????????????????
+        # -- PRIORIDADE 2: ALTO --------------------------------
         @{
             Id    = "MMCSS_GAMING"
             Desc  = "MMCSS Gaming - prioridade RT para threads de jogo"
@@ -5110,7 +5110,7 @@ function Invoke-IAMotorDecisao {
             }
         }
 
-        # ?? NOVO: Intel E/P Cores ?????????????????????????????
+        # -- NOVO: Intel E/P Cores -----------------------------
         @{
             Id    = "INTEL_EP_AFFINITY"
             Desc  = "Intel Hybrid CPU - forcar jogos em P-cores via MMCSS"
@@ -5141,7 +5141,7 @@ function Invoke-IAMotorDecisao {
             }
         }
 
-        # ?? NOVO: Thermal Throttle ????????????????????????????
+        # -- NOVO: Thermal Throttle ----------------------------
         @{
             Id    = "THERMAL_WARN"
             Desc  = "Aviso de Thermal Throttling - CPU/GPU limitados por temperatura"
@@ -5164,7 +5164,7 @@ function Invoke-IAMotorDecisao {
             }
         }
 
-        # ?? PRIORIDADE 3: MEDIO ???????????????????????????????
+        # -- PRIORIDADE 3: MEDIO -------------------------------
         @{
             Id    = "BG_APPS_OFF"
             Desc  = "Background Apps OFF"
@@ -5310,7 +5310,7 @@ public class MemClear {
             }
         }
 
-        # ?? PRIORIDADE 4: EXTREMO ?????????????????????????????
+        # -- PRIORIDADE 4: EXTREMO -----------------------------
         @{
             Id    = "SPECTRE_OFF"
             Desc  = "Spectre/Meltdown OFF - +5-10% IPC [RISCO ALTO]"
@@ -5352,7 +5352,7 @@ public class MemClear {
         }
     )
 
-    # ?? Filtrar por perfil ???????????????????????????????????
+    # -- Filtrar por perfil -----------------------------------
     $perfilAtual = $Script:IA.Perfil
 
     foreach ($regra in $regras) {
@@ -5419,7 +5419,7 @@ function Save-IAExecucao {
         EPCoresDetect  = $snapAntes.CPUEPCores
     }
 
-    # ?? Calcular eficacia por tweak ???????????????????????????
+    # -- Calcular eficacia por tweak ---------------------------
     # Se ganho >= 5: registra como positivo; se <= -3: registra como regressao
     $hist   = $Script:IA.Historico
     $eficacia = @{}
@@ -5438,7 +5438,7 @@ function Save-IAExecucao {
         if ($eficacia[$id].Count -gt 10) { $eficacia[$id] = $eficacia[$id] | Select-Object -Last 10 }
     }
 
-    # ?? Calcular medias de eficacia ???????????????????????????
+    # -- Calcular medias de eficacia ---------------------------
     $eficaciaMedia = @{}
     foreach ($key in $eficacia.Keys) {
         $vals = $eficacia[$key]
@@ -5447,7 +5447,7 @@ function Save-IAExecucao {
         }
     }
 
-    # ?? Salvar historico ?????????????????????????????????????
+    # -- Salvar historico -------------------------------------
     $lista = [System.Collections.Generic.List[object]]::new()
     if ($hist.Execucoes) { foreach ($e in $hist.Execucoes) { $lista.Add($e) } }
     $lista.Add($execucao)
@@ -5922,7 +5922,7 @@ function Show-IAAnalise {
     Write-Host ""
     Write-Host ("  CPU:  {0}% uso  |  Cores: {1}  |  {2}" -f $snap.CPUUsoPct, $snap.CPUNucleos, $snap.CPUNome) -ForegroundColor White
     Write-Host ("  RAM:  {0}% uso  |  Livre: {1} GB  |  {2} @ {3} MHz" -f $snap.RAMUsoPct, $snap.RAMLivreGB, $snap.RAMtipo, $snap.RAMvelocidade) -ForegroundColor White
-    Write-Host ("  GPU:  {0}  |  VRAM: {1} GB  |  {2}?C" -f $snap.GPUNome, $snap.GPUVRAM, $snap.GPUTemp) -ForegroundColor White
+    Write-Host ("  GPU:  {0}  |  VRAM: {1} GB  |  {2} grausC" -f $snap.GPUNome, $snap.GPUVRAM, $snap.GPUTemp) -ForegroundColor White
     Write-Host ("  Disk: {0}  |  Queue: {1}  |  NVMe: {2}" -f $snap.DiscoTipo, $snap.DiskQueueLen, $(if($snap.DiscoNVMe){"Sim"}else{"Nao"})) -ForegroundColor White
     Write-Host ("  Net:  Ping {0}ms  |  Jitter {1}ms  |  TCP: {2}" -f $snap.LatenciaMS, $snap.NetworkJitter, $snap.TCPAutotuning) -ForegroundColor White
     Write-Host ("  Sys:  {0}  |  Plano: {1}  |  Timer: {2}ms" -f $snap.WinBuild, $snap.PlanoEnergia, $snap.TimerResMS) -ForegroundColor White
