@@ -81,7 +81,7 @@ Clear-Host
 # ================================================================
 #  VARIAVEIS GLOBAIS
 # ================================================================
-$Script:Versao      = "7.3.2"
+$Script:Versao      = "7.3.3"
 $Script:NomeProg    = "AbimalekBoost"
 $Script:IDSessao    = (New-Guid).ToString("N").Substring(0,8).ToUpper()
 
@@ -178,12 +178,10 @@ function Invoke-MalikRequest {
     try {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-        $url     = "$($Script:MalikIA.SupabaseURL)$Endpoint"
+        $url     = "$($Script:MalikIA.URL)$Endpoint"
         $headers = @{
-            "apikey"        = $Script:MalikIA.SupabaseAnonKey
-            "Authorization" = "Bearer $($Script:MalikIA.SupabaseAnonKey)"
+            "X-API-Key"     = $Script:MalikIA.APIKey
             "Content-Type"  = "application/json"
-            "Prefer"        = "return=representation"
         }
 
         $params = @{
@@ -2869,6 +2867,61 @@ function Invoke-TweaksGPU {
         }
     )
 
+    # Tweaks especificos AMD Radeon (RX series  -  nao APU)
+    $isAMDdedicada = ($Script:GPUFab -eq 'AMD' -and $Script:GPUNome -notmatch "Vega \d|Radeon.*Graphics|Vega 6|Vega 7|Vega 8|Vega 10|Vega 11")
+    if ($isAMDdedicada) {
+        $tweaksList += @(
+            @{
+                Nome  = "AMD - TdrLevel Otimizado"
+                Desc  = "Evita crash de driver AMD em picos de carga"
+                Risco = "baixo"
+                Bloco = {
+                    $p = "HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers"
+                    Set-ItemProperty $p -Name "TdrLevel" -Value 3 -Type DWord -Force 2>$null
+                }
+            },
+            @{
+                Nome  = "AMD - GPU Scheduling Otimizado"
+                Desc  = "Hardware GPU Scheduling para AMD RDNA/RDNA2/RDNA3"
+                Risco = "baixo"
+                Bloco = {
+                    $p = "HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers"
+                    if (-not (Test-Path $p)) { New-Item $p -Force | Out-Null }
+                    Set-ItemProperty $p -Name "HwSchMode" -Value 2 -Type DWord -Force 2>$null
+                }
+            },
+            @{
+                Nome  = "AMD - Desativar ULPS (Ultra Low Power State)"
+                Desc  = "Evita stuttering por transicao de estado de energia"
+                Risco = "baixo"
+                Bloco = {
+                    # ULPS causa micro-stuttering em dual-GPU e alguns RX
+                    $amdKeys = Get-ChildItem "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}" -EA SilentlyContinue
+                    foreach ($key in $amdKeys) {
+                        $val = Get-ItemProperty $key.PSPath -Name "DriverDesc" -EA SilentlyContinue
+                        if ($val -and $val.DriverDesc -match "AMD|Radeon|ATI") {
+                            Set-ItemProperty $key.PSPath -Name "EnableULPS" -Value 0 -Type DWord -Force 2>$null
+                        }
+                    }
+                }
+            },
+            @{
+                Nome  = "AMD - Otimizar Tessellation"
+                Desc  = "Limita tessellation excessiva para melhor FPS"
+                Risco = "baixo"
+                Bloco = {
+                    $amdKeys = Get-ChildItem "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}" -EA SilentlyContinue
+                    foreach ($key in $amdKeys) {
+                        $val = Get-ItemProperty $key.PSPath -Name "DriverDesc" -EA SilentlyContinue
+                        if ($val -and $val.DriverDesc -match "AMD|Radeon|ATI") {
+                            Set-ItemProperty $key.PSPath -Name "KMD_EnableComputePreemption" -Value 0 -Type DWord -Force 2>$null
+                        }
+                    }
+                }
+            }
+        )
+    }
+
     Invoke-TweakChecklist -Titulo "Tweaks de GPU" -Tweaks $tweaksList
     $Script:TweaksFeitos.Add("GPU Avancado: checklist aplicado")
     LOG "GPU tweaks avancados v5"
@@ -3602,8 +3655,9 @@ function Invoke-AplicarTudo {
     # NTFS: sempre (sem custo, puro ganho)
     $modulosIA.Add("NTFS")
 
-    # MSI Mode: se GPU dedicada detectada
-    if ($Script:GPUFab -ne "AMD" -or $Script:GPUNome -notmatch "Vega|Radeon.*Graphics") {
+    # MSI Mode: para GPU dedicada (AMD Radeon RX, NVIDIA)  -  SKIP para APU integrada
+    $isAPU = $Script:GPUNome -match "Vega \d|Radeon.*Graphics|Intel.*UHD|Intel.*HD Graphics|Intel.*Iris"
+    if (-not $isAPU) {
         $modulosIA.Add("MSI")
     }
 
